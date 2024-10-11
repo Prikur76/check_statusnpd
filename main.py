@@ -158,15 +158,14 @@ def main() -> None:
     """
     try:
         active_drivers = fetch_self_employed_drivers_values()
-
-        logger.info("Successfully fetched active drivers")
-
-        # Update the Google Sheets report
-        spreadsheet_id, range_name = GOOGLE_SHEETS_PARAMS.values()
-        batch_clear_values(spreadsheet_id, range_name)
-        batch_update_values(spreadsheet_id, range_name, active_drivers)
-
-        logger.info("Successfully updated Google Sheets report")
+        if active_drivers:
+            # Update the Google Sheets report
+            spreadsheet_id, range_name = GOOGLE_SHEETS_PARAMS.values()
+            batch_clear_values(spreadsheet_id, range_name)
+            batch_update_values(spreadsheet_id, range_name, active_drivers)
+            logger.info(
+                f'Updated Google Sheets report: {spreadsheet_id} {range_name}'
+            )
 
     except HttpError as err:
         logger.error(f'Failed to update Google Sheets report: {err}')
