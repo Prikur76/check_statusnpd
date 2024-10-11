@@ -40,7 +40,7 @@ Create directory and download this repository in any way convenient for you.
 For example:
 
 ```bash
-git clone https://github.com/prikur76/check_statusnpd
+git clone https://github.com/Prikur76/check_statusnpd.git
 ```
 
 ### Installing
