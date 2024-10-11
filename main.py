@@ -138,7 +138,7 @@ def fetch_self_employed_drivers_values() -> pd.DataFrame:
     ]
     drivers_df["INN"] = drivers_df["INN"]\
         .apply(lambda x: str(x).strip() if x else None)
-    drivers_df = drivers_df[drivers_df["INN"].notnull()][:3]
+    drivers_df = drivers_df[drivers_df["INN"].notnull()]
     drivers_df[["is_self_employed", "message", "request_date"]] = [
         check_self_employment_status(inn) for inn
         in drivers_df["INN"].tolist()
