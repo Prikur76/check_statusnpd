@@ -55,10 +55,22 @@ git clone https://github.com/Prikur76/check_statusnpd.git
 python.exe -m venv venv
 ```
 
-and activate virtual environment
+and activate virtual environment (on Windows):
 
 ```bash
 venv\Scripts\activate
+```
+
+if Linux:
+
+```bash
+source ./venv/bin/activate
+```
+
+Renew pip:
+
+```bash
+pip3  install --upgrade pip
 ```
 
 4. Install dependencies
