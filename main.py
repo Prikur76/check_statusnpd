@@ -106,9 +106,14 @@ def check_self_employment_status(inn: str) -> tuple[bool, str | None, str]:
     is_self_employed = False
     message = "не СМЗ"
     if response.status_code != 200:
+
         message = result.get("message")
+        if "Указан некорректный ИНН" in message:
+            message = "Некорректный ИНН"
+
         attempt = 0
-        if 'taxpayer.status.service.limited.error' in result.get("code") and attempt < 3:
+        if 'taxpayer.status.service.limited.error'\
+                in result.get("code") and attempt < 3:
             time.sleep(40)
             check_self_employment_status(inn)
             attempt += 1
