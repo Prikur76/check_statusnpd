@@ -127,6 +127,97 @@ def check_self_employment_status(inn: str) -> tuple[bool, str | None, str]:
     return is_self_employed, message, request_date
 
 
+def validate_snils(snils: str) -> tuple[str, bool, str]:
+    """Validate a SNILS (Russian Social Insurance Number)."""
+    snils = snils.replace("-", "").replace(" ", "")
+    is_valid = False
+    message = ""
+    formatted_snils = ""
+
+    if not snils:
+        message = "SNILS cannot be empty"
+        return formatted_snils, is_valid, message
+
+    if not snils.isdigit():
+        message = "SNILS can only contain digits"
+        return formatted_snils, is_valid, message
+
+    if len(snils) != 11:
+        message = "SNILS must contain 11 digits"
+        return formatted_snils, is_valid, message
+
+    for i in range(len(snils) - 2):
+        if snils[i] == snils[i + 1] == snils[i + 2]:
+            message = "SNILS cannot contain three repeating digits"
+            return formatted_snils, is_valid, message
+
+    sum_products = sum(
+        int(digit) * (9 - i) for i, digit in enumerate(snils[:-2])
+    )
+
+    if sum_products < 100:
+        control_number = sum_products
+    elif sum_products == 100 or sum_products == 101:
+        control_number = "00"
+    else:
+        control_number = sum_products % 101
+
+    if str(control_number) == snils[-2:]:
+        is_valid = True
+
+    message = "SNILS is not valid"
+    formatted_snils = f"{snils[:3]}-{snils[3:6]}-{snils[6:9]} {snils[9:]}"
+
+    return formatted_snils, is_valid, message
+
+
+def validate_inn_12(inn: str) -> bool:
+    """
+    Validate an INN (Russian Individual Taxpayer Number) according to
+    the rules specified in Federal Law №325-FZ of 2016
+    https://keysystems.ru/files/fo/arm_budjet/show_docum/BKS/onlinehelphtm/ro_kr_algor_klyuch_inn.htm
+    """
+    inn = str(inn)
+    is_valid = False
+    message = ""
+
+    if not inn:
+        message = "ИНН пуст"
+        return is_valid, message
+
+    if not inn.isdigit():
+        message = "ИНН может состоять только из цифр"
+        return is_valid, message
+
+    if len(inn) != 12:
+        message = "ИНН физлица должен состоять из 12 цифр"
+        return is_valid, message
+
+    if len(inn) == 12:
+        coefficients_1 = [7, 2, 4, 10, 3, 5, 9, 4, 6, 8, 0]
+        first_control_num = sum(
+            c * int(d) for c, d in zip(coefficients_1, inn[:11])
+        ) % 11
+        if first_control_num > 9:
+            first_control_num = first_control_num % 10
+        check_first_control_num = bool(first_control_num == int(inn[10:11]))
+
+        coefficients_2 = [3, 7, 2, 4, 10, 3, 5, 9, 4, 6, 8, 0]
+        second_control_num = sum(
+            c * int(d) for c, d in zip(coefficients_2, inn[:11])
+        ) % 11
+        if second_control_num > 9:
+            second_control_num = second_control_num % 10
+        check_second_control_num = bool(second_control_num == int(inn[11:12]))
+
+        if check_first_control_num and check_second_control_num:
+            is_valid = True
+            return is_valid, message
+        message = "Неправильное контрольное число"
+
+    return is_valid, message
+
+
 def fetch_active_drivers_with_inn() -> pd.DataFrame:
     """Retrieve a list of active drivers from 1C:Element"""
     url = "".join(tuple(ELEMENT_URLS.values()))
@@ -141,12 +232,16 @@ def fetch_active_drivers_with_inn() -> pd.DataFrame:
             "OGRN", "KIS_ART_DriverId", "CarDepartment"
         ]
     ]
-    drivers_df["INN"] = drivers_df["INN"]\
-        .apply(lambda x: str(x).strip() if x else None)
-    drivers_with_inn = drivers_df[drivers_df["INN"].notnull()]\
+    drivers_df = drivers_df[drivers_df["INN"].notnull()]
+    drivers_df[["inn_is_valid", "message"]] = \
+        [
+            validate_inn_12(inn)
+            for inn in drivers_df["INN"].tolist()
+        ]
+    drivers_with_valid_inn = drivers_df[drivers_df["inn_is_valid"]]\
         .sort_values(by=["CarDepartment", "FIO"], ascending=[True, True])
 
-    return drivers_with_inn
+    return drivers_with_valid_inn
 
 
 def check_statusnpd() -> None:
@@ -162,6 +257,8 @@ def check_statusnpd() -> None:
             return None
 
         logger.info('Checking self-employment status...')
+        active_drivers_df = active_drivers_df\
+            .drop(columns=["inn_is_valid", "message"])
         active_drivers_df[["is_self_employed", "message", "request_date"]] = \
             [
                 check_self_employment_status(inn)
