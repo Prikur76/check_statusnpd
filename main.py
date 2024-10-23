@@ -5,6 +5,7 @@ from __future__ import print_function
 import time
 import pytz
 import requests
+from requests.exceptions import ConnectionError, Timeout
 import pandas as pd
 
 from datetime import datetime
@@ -82,47 +83,55 @@ def batch_update_values(
     return {range_name: response["responses"][0]["updatedRange"]}
 
 
-def check_self_employment_status(inn: str) -> tuple[bool, str | None, str]:
+def check_self_employment_status(inn: str, max_attempts: int = 3) -> tuple[bool, str, str]:
     """Check the self-employment status of a driver.
 
     Args:
         inn (str): The driver's INN.
 
     Returns:
-        tuple[bool, str | None]:
-            A tuple containing a boolean indicating the self-employment status
-            and a message. If the driver is self-employed, the message is
-            'СМЗ'. If the driver is not self-employed, the message is
-            'не СМЗ'. If there's an error, the message is the error message.
+        tuple[bool, str, str]:
+            A tuple containing a boolean indicating the self-employment status,
+            a message, and the request date. If the driver is self-employed,
+            the message is 'СМЗ'. If the driver is not self-employed, the
+            message is 'не СМЗ'. If there's an error, the message is the error
+            message.
     """
-    request_date = datetime.now(pytz.timezone('Europe/Moscow'))\
-        .strftime('%Y-%m-%d')
-    response = requests.post(
-        url=STATUSNPD_ENDPOINT_URL,
-        json={"inn": inn, "requestDate": request_date},
-        timeout=120
-    )
-    result = response.json()
-    is_self_employed = False
-    message = "не СМЗ"
-    if response.status_code != 200:
+    request_date = datetime.now(
+        pytz.timezone('Europe/Moscow')).strftime('%Y-%m-%d')
+    attempt = 0
 
-        message = result.get("message")
-        if "Указан некорректный ИНН" in message:
-            message = "Некорректный ИНН"
-
-        attempt = 0
-        if 'taxpayer.status.service.limited.error'\
-                in result.get("code") and attempt < 3:
-            time.sleep(40)
-            check_self_employment_status(inn)
+    while attempt < max_attempts:
+        try:
+            response = requests.post(
+                url=STATUSNPD_ENDPOINT_URL,
+                json={"inn": inn, "requestDate": request_date},
+                timeout=120
+            )
+            result = response.json()
+            if response.status_code != 200:
+                message = result.get("message")
+                if "Указан некорректный ИНН" in message:
+                    message = "Некорректный ИНН"
+                break
+            is_self_employed = result.get("status")
+            message = "СМЗ" if is_self_employed else "не СМЗ"
+            break
+        except (ConnectionError, Timeout) as e:
             attempt += 1
+            logger.error(
+                "Ошибка соединения: %s. Попытка %d из %d.", e, attempt,
+                max_attempts)
+            time.sleep(31)
 
-    if result.get("status"):
-        is_self_employed = True
-        message = "СМЗ"
-
-    time.sleep(31)
+            if attempt == max_attempts:
+                logger.error(
+                    "Превышено максимальное количество попыток: %d.",
+                    max_attempts)
+                raise e
+        except requests.exceptions.HTTPError as http_err:
+            logger.error("HTTP error: %s", http_err)
+            break
 
     return is_self_employed, message, request_date
 
@@ -175,7 +184,8 @@ def validate_inn_12(inn: str) -> bool:
     """
     Validate an INN (Russian Individual Taxpayer Number) according to
     the rules specified in Federal Law №325-FZ of 2016
-    https://keysystems.ru/files/fo/arm_budjet/show_docum/BKS/onlinehelphtm/ro_kr_algor_klyuch_inn.htm
+    https://keysystems.ru/files/fo/arm_budjet/show_docum/BKS
+    /onlinehelphtm/ro_kr_algor_klyuch_inn.htm
     """
     inn = str(inn)
     is_valid = False
@@ -274,20 +284,20 @@ def check_statusnpd() -> None:
         )
 
     except requests.exceptions.HTTPError as http_err:
-        logger.error(f"Http Error: {http_err}", exc_info=True)
+        logger.error(f"Http Error: {http_err}", exc_info=False)
 
     except requests.exceptions.ConnectionError as conn_err:
-        logger.error(f"Error Connecting: {conn_err}", exc_info=True)
+        logger.error(f"Error Connecting: {conn_err}", exc_info=False)
 
     except requests.exceptions.Timeout as time_err:
-        logger.error(f"Timeout Error: {time_err}", exc_info=True)
+        logger.error(f"Timeout Error: {time_err}", exc_info=False)
 
     except requests.exceptions.RequestException as err:
-        logger.error(f"Unknown request error: {err}", exc_info=True)
+        logger.error(f"Unknown request error: {err}", exc_info=False)
 
     except HttpError as google_err:
         logger.error(
-            f'Failed to update {spreadsheet_id}: {google_err}', exc_info=True)
+            f'Failed to update {spreadsheet_id}: {google_err}', exc_info=False)
 
 
 if __name__ == '__main__':
