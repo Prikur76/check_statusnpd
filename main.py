@@ -100,11 +100,8 @@ def check_self_employment_status(inn: str, max_attempts: int = 3) -> tuple[bool,
     request_date = datetime.now(
         pytz.timezone('Europe/Moscow')).strftime('%Y-%m-%d')
     attempt = 0
-<<<<<<< HEAD
     is_self_employed = False
     message = ""
-=======
->>>>>>> b8b2ea1a789f7dd12911b38bf3d034f4e6354834
 
     while attempt < max_attempts:
         try:
@@ -138,10 +135,7 @@ def check_self_employment_status(inn: str, max_attempts: int = 3) -> tuple[bool,
             logger.error("HTTP error: %s", http_err)
             break
 
-<<<<<<< HEAD
     time.sleep(31)
-=======
->>>>>>> b8b2ea1a789f7dd12911b38bf3d034f4e6354834
     return is_self_employed, message, request_date
 
 
