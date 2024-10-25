@@ -75,7 +75,7 @@ def batch_update_values(
     service = create_sheets_api_client()
     sheet = service.spreadsheets().values()
     body = {
-        "valueInputOption": "USER_ENTERED",
+        "valueInputOption": "RAW",  # "USER_ENTERED",
         "data": [{"range": range_name, "values": values}]
     }
     request = sheet.batchUpdate(spreadsheetId=spreadsheet_id, body=body)
